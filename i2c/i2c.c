@@ -15,7 +15,7 @@ static void I2C_Release(void) {
     xSemaphoreGive(_mutex);
 }
 
-void I2C_Init_Once() {
+void I2C_InitOnce() {
     _semaphore = xSemaphoreCreateBinary();
     _mutex = xSemaphoreCreateMutex();
     I2C_Queue = xQueueCreate(QUEUE_LENGTH, sizeof(uint8_t));
