@@ -15,14 +15,13 @@ static void I2C_Release(void) {
     xSemaphoreGive(_mutex);
 }
 
-void I2C_InitOnce() {
+void I2C_InitOnce(void) {
     _semaphore = xSemaphoreCreateBinary();
     _mutex = xSemaphoreCreateMutex();
     I2C_Queue = xQueueCreate(QUEUE_LENGTH, sizeof(uint8_t));
 }
 
-
-static void I2C_Init(void) {
+static void I2C_PinReinit(void) {
     GPIOB->MODER    &= ~(GPIO_MODER_MODE8 | GPIO_MODER_MODE9);
     LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_8, LL_GPIO_MODE_ALTERNATE);
     LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_9, LL_GPIO_MODE_ALTERNATE);
@@ -30,6 +29,10 @@ static void I2C_Init(void) {
     LL_GPIO_SetPinPull(GPIOB, LL_GPIO_PIN_9, LL_GPIO_PULL_UP);
     LL_GPIO_SetAFPin_8_15(GPIOB, LL_GPIO_PIN_8, LL_GPIO_AF_4);
     LL_GPIO_SetAFPin_8_15(GPIOB, LL_GPIO_PIN_9, LL_GPIO_AF_4);
+}
+
+static void I2C_Init(void) {
+	I2C_PinReinit();
 
     taskENTER_CRITICAL();
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_I2C1);
