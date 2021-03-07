@@ -1,5 +1,5 @@
 #define TRANSACTION_TIMEOUT_ms 1000
-#define QUEUE_LENGTH 8192
+#define I2C_QUEUE_LENGTH 8192
 #define I2C_ADDRESS_NOT_SHIFT
 
 extern QueueHandle_t I2C_Queue;

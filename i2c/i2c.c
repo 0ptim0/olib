@@ -18,10 +18,11 @@ static void I2C_Release(void) {
 void I2C_InitOnce(void) {
     _semaphore = xSemaphoreCreateBinary();
     _mutex = xSemaphoreCreateMutex();
-    I2C_Queue = xQueueCreate(QUEUE_LENGTH, sizeof(uint8_t));
+    I2C_Queue = xQueueCreate(I2C_QUEUE_LENGTH, sizeof(uint8_t));
 }
 
 static void I2C_PinReinit(void) {
+    /* I2C1 */
     GPIOB->MODER    &= ~(GPIO_MODER_MODE8 | GPIO_MODER_MODE9);
     LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_8, LL_GPIO_MODE_ALTERNATE);
     LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_9, LL_GPIO_MODE_ALTERNATE);
@@ -79,7 +80,7 @@ uint8_t I2C_Transaction(I2C_TypeDef *I2C, uint8_t address, uint16_t rx_length, Q
     #endif
 
     xSemaphoreGive(_semaphore);
-    _err = 0;
+    _err = pdFALSE;
 
     if(_rx_length) {
         if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(TRANSACTION_TIMEOUT_ms)) == pdFALSE) {
@@ -87,7 +88,7 @@ uint8_t I2C_Transaction(I2C_TypeDef *I2C, uint8_t address, uint16_t rx_length, Q
             I2C_Release();
             return pdFALSE;
         }
-        LL_I2C_AcknowledgeNextData(I2C1, LL_I2C_ACK);
+        LL_I2C_AcknowledgeNextData(I2C, LL_I2C_ACK);
         LL_I2C_GenerateStartCondition(I2C);
     } else {
         if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(TRANSACTION_TIMEOUT_ms)) == pdFALSE) {
