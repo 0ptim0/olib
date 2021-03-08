@@ -4,6 +4,7 @@ static SemaphoreHandle_t _semaphore;
 static SemaphoreHandle_t _mutex;
 static volatile uint16_t _rx_length;
 static volatile uint8_t _err;
+static _Bool _init = pdFALSE;
 static volatile uint8_t _address;
 QueueHandle_t USART_Queue;
 
@@ -18,7 +19,12 @@ static void USART_Release(void) {
 void USART_InitOnce(void) {
     _semaphore = xSemaphoreCreateBinary();
     _mutex = xSemaphoreCreateMutex();
-    USART_Queue = xQueueCreate(QUEUE_LENGTH, sizeof(uint8_t));
+    USART_Queue = xQueueCreate(USART_QUEUE_LENGTH, sizeof(uint8_t));
+}
+
+static void USART_NVIC_Enable(void) {
+    NVIC_SetPriority(USART2_IRQn, 12);
+    NVIC_EnableIRQ(USART2_IRQn);
 }
 
 static void USART_PinReinit(void) {
@@ -32,7 +38,7 @@ static void USART_PinReinit(void) {
     LL_GPIO_SetPinSpeed(GPIOA, LL_GPIO_PIN_3, LL_GPIO_SPEED_FREQ_HIGH);
 }
 
-static void USART_Init(void) {
+static void USART_Init(USART_TypeDef *USART) {
     USART_PinReinit();
 
     taskENTER_CRITICAL();
@@ -40,40 +46,43 @@ static void USART_Init(void) {
     taskEXIT_CRITICAL();
 
     /* CONFIG FOR ASYNC MODE */
-    LL_USART_ConfigAsyncMode(USART2);
+    LL_USART_ConfigAsyncMode(USART);
     /* FULL DUPLEX REGIMES */
-    LL_USART_SetTransferDirection(USART2, LL_USART_DIRECTION_TX_RX);
+    LL_USART_SetTransferDirection(USART, LL_USART_DIRECTION_TX);
     /* START + 8B + STOP, NO PARITY */
-    LL_USART_ConfigCharacter(USART2, LL_USART_DATAWIDTH_8B, LL_USART_PARITY_NONE, LL_USART_STOPBITS_1);
+    LL_USART_ConfigCharacter(USART, LL_USART_DATAWIDTH_8B, LL_USART_PARITY_NONE, LL_USART_STOPBITS_1);
     /* USART BAUDRATE */
-    LL_USART_SetBaudRate(USART2, 42000000, LL_USART_OVERSAMPLING_16, 115200);
+    LL_USART_SetBaudRate(USART, 42000000, LL_USART_OVERSAMPLING_16, 115200);
 
-    LL_USART_Enable(USART2);
+    LL_USART_Enable(USART);
 
-    LL_USART_EnableIT_IDLE(USART2);
-    LL_USART_EnableIT_RXNE(USART2);
-    LL_USART_EnableIT_TXE(USART2);
-    LL_USART_EnableIT_TC(USART2);
-
-    NVIC_SetPriority(USART2_IRQn, 12);
-    NVIC_EnableIRQ(USART2_IRQn);
+    USART_NVIC_Enable();
 }
 
 static void USART_Deinit(void) {
+    taskENTER_CRITICAL();
     USART2->CR1 = 0;
     NVIC_DisableIRQ(USART2_IRQn);
-    taskENTER_CRITICAL();
     LL_APB1_GRP1_DisableClock(LL_APB1_GRP1_PERIPH_USART2);
     taskEXIT_CRITICAL();
+
+    _init = pdFALSE;
 }
 
-uint8_t USART_Transaction(USART_TypeDef *USART, ) {
-    static uint8_t _buf;
+uint8_t USART_Transaction(USART_TypeDef *USART, QueueHandle_t queue) {
     USART_Acquire();
-    USART_Init();
+    if(_init == pdFALSE) {
+        USART_Init(USART);
+        _init = pdTRUE;
+    }
 
     xSemaphoreGive(_semaphore);
     _err = pdFALSE;
+
+    LL_USART_EnableIT_IDLE(USART);
+    LL_USART_EnableIT_RXNE(USART);
+    LL_USART_EnableIT_TC(USART);
+    LL_USART_EnableIT_TXE(USART);
 
     if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(TRANSACTION_TIMEOUT_ms))) {
         USART_Deinit();
@@ -87,14 +96,22 @@ uint8_t USART_Transaction(USART_TypeDef *USART, ) {
         return pdFALSE;
     }
 
-    I2C_Release();
+    USART_Release();
     return pdTRUE;
-
 }
 
 void USART2_IRQHandler(void) {
+    static uint8_t _buf;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-
-
+    if(LL_USART_IsActiveFlag_TXE(USART2)) {
+        if(xQueueReceiveFromISR(USART_Queue, &_buf, &xHigherPriorityTaskWoken) != errQUEUE_EMPTY) {
+            LL_USART_TransmitData8(USART2, _buf);
+            return;
+        }
+        xSemaphoreGiveFromISR(_semaphore, &xHigherPriorityTaskWoken);
+        if(xHigherPriorityTaskWoken == pdTRUE) {
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
 }
-
