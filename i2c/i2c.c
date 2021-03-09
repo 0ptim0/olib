@@ -81,7 +81,6 @@ uint8_t I2C_Transaction(I2C_TypeDef *I2C, uint8_t address, uint16_t rx_length, Q
 
     xSemaphoreGive(_semaphore);
     _err = pdFALSE;
-
     if(_rx_length) {
         if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(TRANSACTION_TIMEOUT_ms)) == pdFALSE) {
             __BKPT(1);
@@ -99,20 +98,17 @@ uint8_t I2C_Transaction(I2C_TypeDef *I2C, uint8_t address, uint16_t rx_length, Q
         LL_I2C_EnableIT_TX(I2C);
         LL_I2C_GenerateStartCondition(I2C);
     }
-
     if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(TRANSACTION_TIMEOUT_ms))) {
         I2C_Deinit();
         I2C_Release();
         if(_err) {
             return pdFALSE;
         }
-
     } else {
         I2C_Deinit();
         I2C_Release();
         return pdFALSE;
     }
-
     I2C_Release();
     return pdTRUE;
 }
@@ -129,14 +125,12 @@ void I2C1_EV_IRQHandler(void) {
         LL_I2C_ReadReg(I2C1, SR2);
         LL_I2C_TransmitData8(I2C1, _address);
         return;
-
     } else if(LL_I2C_IsActiveFlag_TXE(I2C1) && !(_rx_length)) {
         if(xQueueReceiveFromISR(I2C_Queue, &_buf, &xHigherPriorityTaskWoken) != errQUEUE_EMPTY) {
             LL_I2C_TransmitData8(I2C1, _buf);
             return;
         }
         LL_I2C_GenerateStopCondition(I2C1);
-
     } else if(LL_I2C_IsActiveFlag_RXNE(I2C1) && (_rx_length)) {
         _buf = LL_I2C_ReceiveData8(I2C1);
         xQueueSendFromISR(I2C_Queue, &_buf, &xHigherPriorityTaskWoken);
@@ -146,15 +140,12 @@ void I2C1_EV_IRQHandler(void) {
         }
         _rx_length--;
         return;
-
     }
 
     LL_I2C_ReadReg(I2C1, SR1);
     LL_I2C_ReadReg(I2C1, SR2);
     LL_I2C_ReadReg(I2C1, DR);
-
     if(!(_rx_length)){
-
         xSemaphoreGiveFromISR(_semaphore, &xHigherPriorityTaskWoken);
         if(xHigherPriorityTaskWoken == pdTRUE) {
             portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -164,13 +155,10 @@ void I2C1_EV_IRQHandler(void) {
 
 void I2C1_ER_IRQHandler(void) {
     _err = pdTRUE;
-
     BaseType_t xHigherPriorityTaskWoken;
     xSemaphoreGiveFromISR(_semaphore, &xHigherPriorityTaskWoken);
     if(xHigherPriorityTaskWoken == pdTRUE) {
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
     I2C1->CR1 |= I2C_CR1_SWRST;
-
-    //__BKPT(1);
 }
