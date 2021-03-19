@@ -5,7 +5,7 @@ static SemaphoreHandle_t _mutex;
 static volatile uint16_t _rx_length;
 static volatile uint8_t _err;
 static volatile uint8_t _address;
-QueueHandle_t I2C_Queue;
+static QueueHandle_t I2C_Queue;
 
 static void I2C_Acquire(void) {
     xSemaphoreTake(_mutex, portMAX_DELAY);
@@ -18,7 +18,6 @@ static void I2C_Release(void) {
 void I2C_InitOnce(void) {
     _semaphore = xSemaphoreCreateBinary();
     _mutex = xSemaphoreCreateMutex();
-    I2C_Queue = xQueueCreate(I2C_QUEUE_LENGTH, sizeof(uint8_t));
 }
 
 static void I2C_PinReinit(void) {
@@ -72,6 +71,7 @@ static void I2C_Deinit(void) {
 uint8_t I2C_Transaction(I2C_TypeDef *I2C, uint8_t address, uint16_t rx_length, QueueHandle_t queue) {
     I2C_Acquire();
     I2C_Init();
+    I2C_Queue = queue;
     _rx_length = rx_length;
     #ifdef I2C_ADDRESS_NOT_SHIFT
         _address = address;
@@ -109,7 +109,6 @@ uint8_t I2C_Transaction(I2C_TypeDef *I2C, uint8_t address, uint16_t rx_length, Q
         I2C_Release();
         return pdFALSE;
     }
-    I2C_Release();
     return pdTRUE;
 }
 
